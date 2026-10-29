@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fraud_rule_engine
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fraud_rule_engine"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    security_opt:
+      - no-new-privileges:true
+
+  fraud-rule-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fraud-rule-engine:1.0.0
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8015
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fraud_rule_engine
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: admin
+    ports:
+      - "127.0.0.1:8015:8015"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  postgres_data:
+
+networks:
+  backend:
+    driver: bridge
