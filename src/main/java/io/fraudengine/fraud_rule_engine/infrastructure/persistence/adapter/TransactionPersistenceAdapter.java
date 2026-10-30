@@ -19,7 +19,7 @@ public class TransactionPersistenceAdapter
     }
 
     @Override
-    public FraudTransaction save(FraudTransaction transaction) {
+    public boolean saveIfAbsent(FraudTransaction transaction) {
 
         TransactionEntity entity = new TransactionEntity(
                 transaction.transactionReference(),
@@ -28,13 +28,13 @@ public class TransactionPersistenceAdapter
                 transaction.currency()
         );
 
-        TransactionEntity saved = repository.save(entity);
-
-        return new FraudTransaction(
-                saved.getTransactionReference(),
-                saved.getAccountNumber(),
-                saved.getAmount(),
-                saved.getCurrency()
+        int rowsInserted = repository.insertIfAbsent(
+                entity.getTransactionReference(),
+                entity.getAccountNumber(),
+                entity.getAmount(),
+                entity.getCurrency()
         );
+
+        return rowsInserted == 1;
     }
 }

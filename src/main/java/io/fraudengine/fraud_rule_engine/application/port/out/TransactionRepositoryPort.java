@@ -4,5 +4,5 @@ import io.fraudengine.fraud_rule_engine.domain.model.FraudTransaction;
 
 public interface TransactionRepositoryPort {
 
-    FraudTransaction save(FraudTransaction transaction);
+    boolean saveIfAbsent(FraudTransaction transaction);
 }

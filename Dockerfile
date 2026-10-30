@@ -16,9 +16,8 @@ RUN --mount=type=cache,target=/root/.m2 \
 COPY src ./src
 
 # Compile, run tests and package the application
-RUN --mount=type=cache,target=/root/.m2 mvn -B -DskipTests package
-#RUN --mount=type=cache,target=/root/.m2 \
-#    mvn -B clean verify
+RUN --mount=type=cache,target=/root/.m2 mvn -B clean verify
+#RUN --mount=type=cache,target=/root/.m2 mvn -B -DskipTests package
 
 # --------------------------------------------------
 # Stage 2: Production runtime

@@ -5,7 +5,6 @@ import io.fraudengine.fraud_rule_engine.application.port.in.EvaluateTransactionU
 import io.fraudengine.fraud_rule_engine.application.port.out.FraudDecisionRepositoryPort;
 import io.fraudengine.fraud_rule_engine.application.port.out.FraudRuleRepositoryPort;
 import io.fraudengine.fraud_rule_engine.application.port.out.TransactionRepositoryPort;
-
 import io.fraudengine.fraud_rule_engine.domain.enums.DecisionStatus;
 import io.fraudengine.fraud_rule_engine.domain.model.FraudDecision;
 import io.fraudengine.fraud_rule_engine.domain.model.FraudRule;
@@ -38,9 +37,8 @@ public class FraudEvaluationService implements EvaluateTransactionUseCase {
     @Transactional
     public FraudDecision evaluate(EvaluateTransactionCommand command) {
 
-        // 1. Check whether a decision already exists.
-        var existingDecision =
-                fraudDecisionRepository.findByTransactionReference(
+        // 1. Return the existing decision if this transaction was processed.
+        var existingDecision = fraudDecisionRepository.findByTransactionReference(
                         command.transactionReference());
 
         if (existingDecision.isPresent()) {
@@ -55,24 +53,34 @@ public class FraudEvaluationService implements EvaluateTransactionUseCase {
                 command.currency()
         );
 
-        // 3. Save the transaction.
-        transactionRepository.save(transaction);
+        // 3. Atomically insert the transaction if its reference is new.
+        boolean inserted = transactionRepository.saveIfAbsent(transaction);
+
+        if (!inserted) {
+            // A concurrent request may have processed this transaction.
+            return fraudDecisionRepository
+                .findByTransactionReference(command.transactionReference())
+                .orElseThrow(() -> new IllegalStateException(
+                "Transaction already exists but no fraud decision was found"
+            ));
+        }
 
         // 4. Load active fraud rules.
         List<FraudRule> rules = fraudRuleRepository.findActiveRules();
 
         // 5. Evaluate the transaction against the rules.
         List<String> triggeredRules = rules.stream()
-                .filter(FraudRule::active)
-                .filter(rule -> rule.amountThreshold() != null)
-                .filter(rule -> command.amount()
-                        .compareTo(rule.amountThreshold()) > 0)
-                .map(FraudRule::code)
-                .toList();
+            .filter(FraudRule::active)
+            .filter(rule -> rule.amountThreshold() != null)
+            .filter(rule -> command.amount()
+                    .compareTo(rule.amountThreshold()) > 0)
+            .map(FraudRule::code)
+            .toList();
 
         // 6. Determine the decision.
-        DecisionStatus status = triggeredRules.isEmpty() ? DecisionStatus.APPROVED
-                                                         : DecisionStatus.REVIEW;
+        DecisionStatus status = triggeredRules.isEmpty()
+                ? DecisionStatus.APPROVED
+                : DecisionStatus.REVIEW;
 
         // 7. Create the fraud decision.
         FraudDecision decision = new FraudDecision(
